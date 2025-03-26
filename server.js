@@ -16,10 +16,10 @@ const app = express();
 // CORS phải ở đầu tiên
 app.use(
   cors({
-    origin: "https://movie-app-fe-alpha.vercel.app",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true, // Nếu cần gửi cookie hoặc token
+    origin: ["https://movie-app-fe-alpha.vercel.app"], // Danh sách domain cho phép
+    methods: ["GET", "POST", "PUT", "DELETE"], // Các method cho phép
+    allowedHeaders: ["Content-Type", "Authorization"], // Các headers cho phép
+    credentials: true, // Cho phép gửi cookie, token
   })
 );
 
