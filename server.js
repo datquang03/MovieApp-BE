@@ -16,7 +16,7 @@ const app = express();
 // Connect DB
 app.use(
   cors({
-    origin: "https://movie-app-fe-alpha.vercel.app/", // Domain frontend
+    origin: "https://movie-app-fe-alpha.vercel.app/api", // Domain frontend
     methods: ["GET", "POST", "PUT", "DELETE"], // Các method cho phép
     allowedHeaders: ["Content-Type", "Authorization"], // Headers frontend gửi
   })
