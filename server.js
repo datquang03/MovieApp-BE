@@ -9,9 +9,15 @@ import movieRoute from "./routes/movies.router.js";
 import categoryRoute from "./routes/categories.router.js";
 import messageRoute from "./routes/messages.router.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
-import { Server } from "socket.io";
-import http from "http";
+import fs from "fs"; // Thêm fs để tạo thư mục
 
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 dotenv.config();
 const app = express();
 
@@ -23,26 +29,22 @@ app.use(express.json());
 // Middleware xử lý lỗi
 app.use(errorHandler);
 
-// Cấu hình multer để lưu file vào thư mục uploads/
+// Tạo thư mục uploads/ nếu chưa tồn tại (chỉ cho cục bộ)
+const uploadDir = "uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+// Cấu hình multer để lưu file
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Lưu vào thư mục uploads/
+    cb(null, "uploads/"); // Dùng /tmp/uploads/ trên Vercel nếu cần
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 const upload = multer({ storage });
-
-// Khởi tạo HTTP server và Socket.IO
-const server = http.createServer(app);
-const io = new Server(server);
-
-// Middleware để gán io vào request
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
 
 // Định tuyến API
 app.get("/", (req, res) => {
@@ -58,33 +60,14 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+  const image = `${req.protocol}://${req.get("host")}/uploads/${
     req.file.filename
   }`;
-  res.json({ imageUrl });
+  res.json({ image });
 });
 
 // Serve ảnh từ thư mục uploads/
 app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
 
-// Lắng nghe kết nối socket
-io.on("connection", (socket) => {
-  console.log("A user connected");
-
-  // Lắng nghe sự kiện từ client, ví dụ "send_message"
-  socket.on("send_message", (message) => {
-    console.log("Message received:", message);
-    // Phát lại cho tất cả người dùng khác (broadcast)
-    socket.broadcast.emit("receive_message", message);
-  });
-
-  // Xử lý ngắt kết nối
-  socket.on("disconnect", () => {
-    console.log("A user disconnected");
-  });
-});
-
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+// Export app cho Vercel
+export default app; // Thay vì server.listen()
