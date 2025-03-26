@@ -13,18 +13,21 @@ import { v2 as cloudinary } from "cloudinary";
 dotenv.config();
 const app = express();
 
-// Connect DB
+// CORS phải ở đầu tiên
 app.use(
   cors({
-    origin: "https://movie-app-fe-alpha.vercel.app", // Domain frontend
-    methods: ["GET", "POST", "PUT", "DELETE"], // Các method cho phép
-    allowedHeaders: ["Content-Type", "Authorization"], // Headers frontend gửi
+    origin: "https://movie-app-fe-alpha.vercel.app",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true, // Nếu cần gửi cookie hoặc token
   })
 );
+
+// Connect DB
 connectDB();
 app.use(express.json());
 
-// Middleware xử lý lỗi
+// Middleware xử lý lỗi (đặt sau các route)
 app.use(errorHandler);
 
 // Cấu hình Cloudinary
@@ -34,10 +37,10 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Cấu hình multer (lưu tạm trên /tmp)
+// Cấu hình multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "/tmp"); // Vercel dùng /tmp cho file tạm
+    cb(null, "/tmp");
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -68,5 +71,4 @@ app.post("/api/upload", upload.single("image"), async (req, res) => {
   }
 });
 
-// Export app cho Vercel
 export default app;
