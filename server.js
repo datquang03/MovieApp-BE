@@ -14,8 +14,14 @@ dotenv.config();
 const app = express();
 
 // Connect DB
+app.use(
+  cors({
+    origin: "https://movie-app-fe-alpha.vercel.app", // Domain frontend
+    methods: ["GET", "POST", "PUT", "DELETE"], // Các method cho phép
+    allowedHeaders: ["Content-Type", "Authorization"], // Headers frontend gửi
+  })
+);
 connectDB();
-app.use(cors());
 app.use(express.json());
 
 // Middleware xử lý lỗi
