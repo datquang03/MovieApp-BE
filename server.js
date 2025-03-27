@@ -11,6 +11,7 @@ import messageRoute from "./routes/messages.router.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { Server } from "socket.io";
 import http from "http";
+import Message from "./models/messages.model.js";
 
 dotenv.config();
 const app = express();
@@ -26,7 +27,7 @@ app.use(errorHandler);
 // Cấu hình multer để lưu file vào thư mục uploads/
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Lưu vào thư mục uploads/
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -36,7 +37,12 @@ const upload = multer({ storage });
 
 // Khởi tạo HTTP server và Socket.IO
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173", // URL frontend (Vite mặc định port 5173)
+    methods: ["GET", "POST"],
+  },
+});
 
 // Middleware để gán io vào request
 app.use((req, res, next) => {
@@ -69,18 +75,40 @@ app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
 
 // Lắng nghe kết nối socket
 io.on("connection", (socket) => {
-  console.log("A user connected");
+  console.log("A user connected:", socket.id);
 
-  // Lắng nghe sự kiện từ client, ví dụ "send_message"
-  socket.on("send_message", (message) => {
-    console.log("Message received:", message);
-    // Phát lại cho tất cả người dùng khác (broadcast)
-    socket.broadcast.emit("receive_message", message);
+  // User tham gia room dựa trên userId
+  socket.on("join", (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined room`);
+  });
+
+  // Nhận và xử lý tin nhắn từ client
+  socket.on("send_message", async (data) => {
+    const { senderId, receiverId, message } = data;
+    console.log("Message received:", data);
+
+    try {
+      // Lưu tin nhắn vào database
+      const newMessage = new Message({
+        senderId,
+        receiverId,
+        message,
+        createdAt: new Date(),
+      });
+      await newMessage.save();
+
+      // Gửi tin nhắn tới receiver và sender
+      io.to(receiverId).emit("receive_message", newMessage);
+      io.to(senderId).emit("receive_message", newMessage);
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
   });
 
   // Xử lý ngắt kết nối
   socket.on("disconnect", () => {
-    console.log("A user disconnected");
+    console.log("A user disconnected:", socket.id);
   });
 });
 
