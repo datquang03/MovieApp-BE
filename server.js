@@ -2,51 +2,47 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
+import path from "path";
 import { connectDB } from "./config/db.js";
 import userRoute from "./routes/users.router.js";
 import movieRoute from "./routes/movies.router.js";
 import categoryRoute from "./routes/categories.router.js";
 import messageRoute from "./routes/messages.router.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
-import { v2 as cloudinary } from "cloudinary";
+import { Server } from "socket.io";
+import http from "http";
 
 dotenv.config();
 const app = express();
 
-// CORS phải ở đầu tiên
-app.use(
-  cors({
-    origin: ["https://movie-app-fe-alpha.vercel.app"], // Danh sách domain cho phép
-    methods: ["GET", "POST", "PUT", "DELETE"], // Các method cho phép
-    allowedHeaders: ["Content-Type", "Authorization"], // Các headers cho phép
-    credentials: true, // Cho phép gửi cookie, token
-  })
-);
-
 // Connect DB
 connectDB();
+app.use(cors());
 app.use(express.json());
 
-// Middleware xử lý lỗi (đặt sau các route)
+// Middleware xử lý lỗi
 app.use(errorHandler);
 
-// Cấu hình Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Cấu hình multer
+// Cấu hình multer để lưu file vào thư mục uploads/
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "/tmp");
+    cb(null, "uploads/"); // Lưu vào thư mục uploads/
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 const upload = multer({ storage });
+
+// Khởi tạo HTTP server và Socket.IO
+const server = http.createServer(app);
+const io = new Server(server);
+
+// Middleware để gán io vào request
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 // Định tuyến API
 app.get("/", (req, res) => {
@@ -57,18 +53,38 @@ app.use("/api/movies", movieRoute);
 app.use("/api/categories", categoryRoute);
 app.use("/api/messages", messageRoute);
 
-// API Upload Ảnh với Cloudinary
-app.post("/api/upload", upload.single("image"), async (req, res) => {
+// API Upload Ảnh
+app.post("/api/upload", upload.single("image"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
-  try {
-    const result = await cloudinary.uploader.upload(req.file.path);
-    res.json({ imageUrl: result.secure_url });
-  } catch (error) {
-    console.error("Cloudinary upload error:", error);
-    res.status(500).json({ error: "Upload failed" });
-  }
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+    req.file.filename
+  }`;
+  res.json({ imageUrl });
 });
 
-export default app;
+// Serve ảnh từ thư mục uploads/
+app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
+
+// Lắng nghe kết nối socket
+io.on("connection", (socket) => {
+  console.log("A user connected");
+
+  // Lắng nghe sự kiện từ client, ví dụ "send_message"
+  socket.on("send_message", (message) => {
+    console.log("Message received:", message);
+    // Phát lại cho tất cả người dùng khác (broadcast)
+    socket.broadcast.emit("receive_message", message);
+  });
+
+  // Xử lý ngắt kết nối
+  socket.on("disconnect", () => {
+    console.log("A user disconnected");
+  });
+});
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
