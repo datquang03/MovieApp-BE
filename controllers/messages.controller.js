@@ -34,6 +34,12 @@ const getMessagesById = async (req, res) => {
     const receiverId = req.params.id;
     const senderId = req.user._id;
 
+    if (senderId.toString() === receiverId) {
+      return res.status(400).json({
+        message: "Cannot fetch messages with yourself",
+      });
+    }
+
     const messages = await Message.find({
       $or: [
         { senderId: senderId, receiverId: receiverId },
